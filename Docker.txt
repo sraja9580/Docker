@@ -1,0 +1,153 @@
+Hello World Rest
+-------------------
+	#Building Docker Image for Hello-world rest API
+	1. Build JAR
+	2. Setup Prerequisites for running the JAR
+		-openjdk:8-jdk-alphine
+	3.Copy JAR
+	4.RUN JAR
+	
+	Manual steps
+	--------
+	1. build the project
+	2. Open docker terminal
+	3. cd to project jar location
+		F:\Training Workspace\udemay\docker\docker-crash-course-master\01-hello-world-rest-api
+	4. Pull and run openjdk:8-jdk-alpine image 
+		docker run -dit openjdk:8-jdk-alpine 
+		usually we use docker run -d -openjdk:8-jdk-alphine to run container
+		dit is intractive so we can perform some operation on the container(like moving the project jar inside)
+	5. Move the project jar insde the container tmp directory use container name or containerid
+		docker container cp target/project.jar containerid(or)container name:/tmp 
+		use
+		docker container cp hello-world-rest-api.jar dazzling_chatterj:/tmp 
+		or below on which uses container id
+		docker container cp target/hello-world-rest-api.jar fae7:/tmp 
+	6. Go and check the temp location for jar file
+		docker container exec containerid ls /tmp
+		docker container exec fae7 ls /tmp
+	7. If jar successfully moved save the container as image
+		docker container commit containerid(or)containername repository/imagename:tag
+		docker container commit fae7 raja9580/hello-world-rest:manual1
+	8. execute (docker images) command to verify image created or not
+	9. Even if the emage created when try run the image(docke run imageid) nothing will run 
+		because we didnt give the startup commant to execute bootjar
+	10. Add startup command
+		docker container commit --change='CMD ["java","-jar","/tmp/jarfilename"]' containerid repo/imagename:tagname
+		docker container commit --change='CMD ["java","-jar","/tmp/hello-world-rest-api.jar"]' fae7 raja9580/hello-world-rest:manual2
+	11. Check the image created or not and run image launch app and check
+		docker run -p 8082:8080 raja9580/hello-world-rest:manual2
+		http://192.168.99.100:8082/hello-world  (local host will not work with docker toolbox)
+		****************************************
+		
+	Using Docker file
+	-------------------
+	1. Create new file called Dockerfile extension not important .below is the file content.
+		FROM openjdk:8-jdk-alpine	
+		ADD target/hello-world-rest-api.jar hello-world-rest-api.jar
+		ENTRYPOINT ["sh", "-c", "java -jar /hello-world-rest-api.jar"]
+	2. docker build -t repo/imagename:taganame . (. after space at the end is important)
+	   docker build -t raja9580/hello-world-rest:dockerfile .
+	3. Check the image created or not and run image launch app and check
+		docker run -p 8083:8080 raja9580/hello-world-rest:dockerfile
+		http://192.168.99.100:8083/hello-world  (local host will not work with docker toolbox)
+		****************************************
+		
+	Use SPOTIFY to automate docker image creatio as part build process
+	-------------------------------------------------------------------
+		<plugin>
+			<groupId>com.spotify</groupId>
+			<artifactId>dockerfile-maven-plugin</artifactId>
+			<version>1.4.10</version>
+			<executions>
+				<execution>
+					<id>default</id>
+					<goals>
+						<goal>build</goal>
+					</goals>
+				</execution>
+			</executions>
+			<configuration>
+				<repository>raja9580/${project.name}</repository>
+				<tag>${project.version}</tag>
+				<skipDockerInfo>true</skipDockerInfo>
+			</configuration>
+		</plugin>
+		
+		*****************************************************************************************************
+		*****************************************************************************************************
+		
+PUSHING DOCKER FILE TO HUB
+--------------------------
+	docker login (provide user id and pwd in command prompt)
+	docker push raja9580/hello-world-rest:dockerfile
+	
+Docker File for Spring Boot Web application  (02-todo-web-application-h2)
+-------------------------------------------
+	
+	
+	FROM tomcat:8.0.51-jre8-alpine
+	EXPOSE 8080
+	RUN rm -rf /usr/local/tomcat/webapps/*
+	COPY target/*.war /usr/local/tomcat/webapps/ROOT.war
+	CMD ["catalina.sh","run"]
+
+   **in the previous normal boot app we used (ADD) to copy the files ,here we are using (COPY) commend
+   ADD can pull the files even from ULS
+   COPY is used to copy from local directories
+   
+   Launching APP
+   docker run -p 8080:8080 in28min/todo-web-application-h2:0.0.1-SNAPSHOT
+   http://192.168.99.100:8080/list-todos
+   
+   
+		*****************************************************************************************************
+		*****************************************************************************************************
+ RUNNING MYSQL IN DOCKER CON   (03-todo-web-application-mysql)
+ ---------------------------
+ Step1:
+	 https://hub.docker.com/_/mysql
+	 pulling to local docker pull mysql:5.7
+	 
+	 RUN Container
+	 ------------	 
+	 in the below command we are give db name root password user id and password for further cofig refer  https://hub.docker.com/_/mysql
+	 
+	 docker run --detach --env MYSQL_ROOT_PASSWORD=dummypassword --env MYSQL_USER=todos-user --env MYSQL_PASSWORD=dummytodos --env MYSQL_DATABASE=todos --name mysql --publish 3306:3306 mysql:5.7
+	 
+	 u can use below 
+	 detach d
+	 env v
+	 
+	 Connet to mysql work bench
+	 --------------------------
+	 192.168.99.100:3306 instead localhost:3306
+	 
+Step2: Now push tha application container and try accessing the application
+	   1. cd docker-crash-course-master\03-todo-web-application-mysql
+		  mvn package
+	   2. Run container
+		  docker run -p 8080:8080 -d in28min/todo-web-application-mysql:0.0.1-SNAPSHOT
+		  if u check the logs u will get error
+			com.mysql.cj.jdbc.exceptions.CommunicationsException: Communications link failure
+		  http://192.168.99.100:8080/list-todos
+	   3. THE EXCEPTION HAPPENING BEACUSE IN DOCKER ALL THE CONTAINERS RUN IN BRIGE NETWORK BY DEFAULT.
+	      CONTAINERS WITH IN BRIGENETWORK WONT BE ABLE TO COMMUNITCATE BY DEFAULT.
+		  WE HAVE TO USE LINK OR RUN THE CONTAINERS IN CUSTOM NETWORK
+	   4. RUN CONTAINERS WITH LINK TO MYSQL
+		  docker container run -p 8082:8080 --link=mysql -e RDS_HOSTNAME=mysql  in28min/todo-web-application-mysql:0.0.1-SNAPSHOT
+		                           
+								   ************CONTAINERS IN CUSTOM NETWORK**********
+	   5. USING LINKS NOT BETTER APPROCH.WE CAN RUN OUR CONTAINERSIN CUSTOM NETWORK
+		  Create network 
+		  --------------
+		  docker network create web-application-mysql-network
+		  
+		  Run MYSQL and APP in custom network
+		  docker run -p 3306:3306 --network=web-application-mysql-network -d in28min/todo-web-application-mysql:0.0.1-SNAPSHOT
+		  docker container run -p 8080:8080 --network=web-application-mysql-network -e RDS_HOSTNAME=mysql  in28min/todo-web-application-mysql:0.0.1-SNAPSHOT
+		  
+		  check the application
+		  http://192.168.99.100:8082/list-todos
+	
+	    
